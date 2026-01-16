@@ -230,3 +230,101 @@ python3 -m pytest tests/
 - Confirm Python backend is running in realtime mode
 - Check that port 8765 is not blocked
 - Look for "WebSocket server started" in backend logs
+
+- graph TD
+    A[TopstepX API / Massive.io] -->|Market Data| B(Pipeline Orchestrator)
+    B --> C{Indicator Engine}
+    C -->|Phi Sigma| D[Feature Cache]
+    C -->|TVI / SVC| D
+    D --> E[TGC Encoder]
+    E --> F[WebSocket Server]
+    F --> G[React Dashboard]
+    E --> H[PyQt Desktop GUI]
+Conversation with Gemini
+make mee a completer read me file for this repo, include schematic, feature and functionality
+
+Here is a comprehensive README for your Signal Engine GUI repository. I have structured it to be professional, scannable, and informative, incorporating the technical details found in your codebase.
+
+Gestalt Signal Engine (GUI Version)
+The Gestalt Signal Engine is a high-performance, real-time market data pipeline designed for professional traders. It integrates directly with the TopstepX API to fetch live market data, compute proprietary technical indicators using mathematical constants like the Golden Ratio, and visualize results through a modern PyQt-based Desktop GUI or a React Dashboard.
+
+🏗 System Architecture
+The engine follows a modular orchestration pattern to ensure low-latency data processing and high reliability.
+
+Code snippet
+graph TD
+    A[TopstepX API / Massive.io] -->|Market Data| B(Pipeline Orchestrator)
+    B --> C{Indicator Engine}
+    C -->|Phi Sigma| D[Feature Cache]
+    C -->|TVI / SVC| D
+    D --> E[TGC Encoder]
+    E --> F[WebSocket Server]
+    F --> G[React Dashboard]
+    E --> H[PyQt Desktop GUI]
+✨ Key Features
+Real-Time Data Streaming: Seamless integration with TopstepX for live futures data (Gold, S&P 500, Nasdaq, Crude Oil).
+
+Proprietary Indicators: Specialized signal modules including Phi Sigma (volatility regime) and Tribernachi-based momentum indicators.
+
+TGC Compression: Uses Tribernachi Geometric Compression to reduce data overhead by 20-30% for faster transmission.
+
+Dual Interface: Choose between a lightweight React web dashboard or a robust PyQt desktop application.
+
+Robust Error Handling: Features exponential backoff, session recovery, and automated token refreshing for 24/7 stability.
+
+📊 Proprietary Indicators & Logic
+The engine calculates several advanced metrics to identify high-conviction trading opportunities:
+
+Indicator	Range	Description
+Phi Sigma	0 to 10	Volatility regime score based on the golden ratio (ϕ).
+Directional	-1 to 1	Market direction filtered with momentum fade logic.
+TVI	-1 to 1	Time-Value Index: measures price-volume momentum.
+SVC Delta	-1 to 1	Signed Volume Change: tracks aggressive buying/selling.
+Buy Signal Detection Logic
+A Buy Signal is triggered on the dashboard when:
+
+Phi Sigma ≥4.0 (Indicates a high-volatility regime).
+
+Directional Indicator ≥0.5 (Indicates strong bullish conviction).
+
+🚀 Quick Start
+1. Environment Setup
+Bash
+# Clone the repository
+git clone https://github.com/rickpeters112233/signal-engine-gui.git
+cd signal-engine-gui
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+2. Configuration
+Rename .env.example to .env and add your Topstep credentials:
+
+Code snippet
+TOPSTEP_USERNAME=your_username
+TOPSTEP_PASSWORD=your_password
+TOPSTEP_APIKEY=your_api_key
+3. Launching the GUI
+To start the desktop interface:
+
+Bash
+python3 main_gui.py
+To run the backend with the React dashboard:
+
+Bash
+python3 main.py --mode realtime --provider topstepx
+🛠 Project Structure
+api/: Data provider abstractions (Topstep, Massive, Websocket).
+
+features/: The mathematical core (Phi Sigma, TVI, SVC, Directional logic).
+
+tribernachi/: Compression and tensor recurrence engines.
+
+orchestration/: Coordinates the flow from data ingestion to signal output.
+
+client/: Source code for the React-based frontend.
+
+
