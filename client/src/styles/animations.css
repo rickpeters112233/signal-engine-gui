@@ -1,0 +1,76 @@
+/* Global animations and keyframes for Gestalt dashboard */
+
+@keyframes jitter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(2px, 1px); }
+  50% { transform: translate(-1px, -2px); }
+  75% { transform: translate(1px, 2px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes flash-up {
+  0% { background-color: rgba(255, 255, 255, 0.2); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-down {
+  0% { background-color: rgba(255, 68, 68, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Animation classes */
+.up {
+  animation: jitter 0.3s ease-in-out, flash-up 0.5s ease-out;
+}
+
+.down {
+  animation: jitter 0.3s ease-in-out, flash-down 0.5s ease-out;
+}
+
+.jitter:not(.up):not(.down) {
+  animation: jitter 0.3s ease-in-out;
+}
+
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.status-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Flash warning animation for major event warning */
+@keyframes flash-warning {
+  0%, 100% {
+    background-color: rgba(255, 68, 68, 0.2);
+    border-color: #FF4444;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.3);
+  }
+  50% {
+    background-color: rgba(255, 68, 68, 0.4);
+    border-color: #FF6666;
+    box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+  }
+}
+
+.flash-warning {
+  animation: flash-warning 1s ease-in-out infinite;
+}
