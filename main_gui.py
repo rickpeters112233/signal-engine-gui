@@ -40,8 +40,8 @@ class EngineThread(QThread):
             sys.executable, "main.py",
             "--contract_id", self.contract,
             "--mode", "realtime",
-            "--provider", "topstepx",
-            "--no-browser"
+            "--provider", "topstepx"
+            
         ]
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
