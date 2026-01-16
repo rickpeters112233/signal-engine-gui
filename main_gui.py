@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import re
+from PyQt6.QtWidgets import QStyle
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -110,13 +111,13 @@ class GestaltDashboard(QMainWindow):
         # Tray icon (fix warning)
         self.tray = QSystemTrayIcon(self)
         # Use built-in Qt icon or provide your own .ico/.png
-        icon = QApplication.style().standardIcon(QStyle.SP_ComputerIcon)  # fallback
-        self.tray.setIcon(icon)
+        self.tray = QSystemTrayIcon(self)
+        self.tray.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         tray_menu = QMenu()
         tray_menu.addAction("Restore", self.showNormal)
         tray_menu.addAction("Quit", app.quit)
         self.tray.setContextMenu(tray_menu)
-        self.tray.activated.connect(lambda r: self.showNormal() if r == QSystemTrayIcon.ActivationReason.Trigger else None)
+        self.tray.activated.connect(lambda reason: self.showNormal() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
         self.tray.show()
 
         # Main layout
