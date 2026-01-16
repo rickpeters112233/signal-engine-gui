@@ -3,16 +3,17 @@ import os
 import subprocess
 import re
 from datetime import datetime
+import time
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QProgressBar, QSystemTrayIcon, QMenu, QStyleFactory, QStyle
 )
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
 from PyQt6.QtGui import QIcon, QPalette, QColor, QFont
-import time
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+# Auto front month gold
 def get_gold_contract():
     now = datetime.now()
     m = now.month
@@ -85,9 +86,8 @@ class EngineThread(QThread):
             self.proc.terminate()
             try:
                 self.proc.wait(timeout=5)
-            except:
+            except subprocess.TimeoutExpired:
                 self.proc.kill()
-
 
 class GestaltDashboard(QMainWindow):
     def __init__(self):
@@ -104,7 +104,7 @@ class GestaltDashboard(QMainWindow):
         pal.setColor(QPalette.ColorRole.Text, QColor(240,240,255))
         app.setPalette(pal)
 
-        # Tray icon
+        # Tray
         self.tray = QSystemTrayIcon(self)
         self.tray.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         menu = QMenu()
@@ -260,12 +260,10 @@ class GestaltDashboard(QMainWindow):
 
         if self.engine:
             self.engine.stop()
-            # Give it time to terminate
-            time.sleep(1.5)
+            time.sleep(1.5)  # give time for termination
             self.engine.wait()
 
         self.status.setText("FULLY STOPPED & EXITING")
-        # Small delay for user to see message
         QTimer.singleShot(1200, app.quit)
 
     def update_ui(self, d):
@@ -286,9 +284,6 @@ class GestaltDashboard(QMainWindow):
             self.arrow.setText(d['dir_arrow'])
             color = "#00ff00" if d['dir_arrow'] == '↑' else "#ff4444" if d['dir_arrow'] == '↓' else "#ffdd00"
             self.arrow.setStyleSheet(f"font-size:60px; color:{color};")
-
-    def full_exit(self):
-        self.stop_and_exit()
 
     def closeEvent(self, event):
         event.ignore()
