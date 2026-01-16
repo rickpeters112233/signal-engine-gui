@@ -109,7 +109,7 @@ class GestaltDashboard(QMainWindow):
         self.tray.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         menu = QMenu()
         menu.addAction("Restore", self.showNormal)
-        menu.addAction("Exit", self.full_exit)
+        menu.addAction("Exit", app.quit)
         self.tray.setContextMenu(menu)
         self.tray.show()
 
