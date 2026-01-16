@@ -270,7 +270,7 @@ class GestaltDashboard(QMainWindow):
             return
         self.status.setText("Starting...")
         self.engine = EngineThread(get_gold_contract())
-        self.engine.new_line.connect(self.status.setText)
+        self.engine.log_line.connect(self.status.setText)
         self.engine.data_update.connect(self.update_data)
         self.engine.start()
 
