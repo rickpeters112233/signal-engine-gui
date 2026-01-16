@@ -5,32 +5,33 @@ import re
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QProgressBar, QSystemTrayIcon, QMenu, QStyleFactory
+    QGroupBox, QProgressBar, QSystemTrayIcon, QMenu, QStyleFactory, QStyle
 )
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
 from PyQt6.QtGui import QIcon, QPalette, QColor, QFont
 
+# Change to your project directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# Auto-select current gold front month
+# Auto front-month gold contract (Feb 2026 = G26 as of Jan 15, 2026)
 def get_gold_contract():
     now = datetime.now()
-    m = now.month
-    y = str(now.year)[-1]
-    active_months = {2:'G', 4:'J', 6:'M', 8:'Q', 10:'V', 12:'Z'}
-    next_m = next((mm for mm in sorted(active_months) if mm >= m), 2)
-    if next_m < m:
-        y = str(now.year + 1)[-1]
-    return f"CON.F.US.GCE.{active_months[next_m]}{y}"
+    month = now.month
+    year_digit = str(now.year)[-1]
+    active = {2: 'G', 4: 'J', 6: 'M', 8: 'Q', 10: 'V', 12: 'Z'}
+    next_month = next((m for m in sorted(active) if m >= month), min(active))
+    if next_month < month:
+        year_digit = str(now.year + 1)[-1]
+    return f"CON.F.US.GCE.{active[next_month]}{year_digit}"
 
 class EngineThread(QThread):
-    new_line = pyqtSignal(str)
+    log_line = pyqtSignal(str)
     data_update = pyqtSignal(dict)
 
     def __init__(self, contract_id):
         super().__init__()
         self.contract_id = contract_id
-        self.process = None
+        self.proc = None
 
     def run(self):
         cmd = [
@@ -41,7 +42,7 @@ class EngineThread(QThread):
             "--provider", "topstepx"
         ]
 
-        self.process = subprocess.Popen(
+        self.proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -50,26 +51,27 @@ class EngineThread(QThread):
             universal_newlines=True
         )
 
-        for line in iter(self.process.stdout.readline, ''):
+        for line in iter(self.proc.stdout.readline, ''):
             clean = line.strip()
             if not clean:
                 continue
-            self.new_line.emit(clean)
+            self.log_line.emit(clean)
 
             update = {}
+            lower = clean.lower()
 
-            # Contract / Ticker
-            if re.search(r'(contract|ticker|symbol).*CON\.F\.US\.GCE', clean, re.I):
+            # Contract variations
+            if any(k in lower for k in ["contract", "ticker", "symbol", "con.f.us.gce"]):
                 m = re.search(r'(CON\.F\.US\.GCE\.[A-Z]\d+)', clean, re.I)
                 if m:
                     update['contract'] = m.group(1)
 
             # Timestamp
-            m = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', clean)
+            m = re.search(r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}', clean)
             if m:
-                update['timestamp'] = m.group(1)
+                update['timestamp'] = m.group()
 
-            # Price
+            # Price (last/close)
             m = re.search(r'(?:price|close|last|settle).*?([\d,]+\.?\d{1,2})', clean, re.I)
             if m:
                 update['price'] = m.group(1)
@@ -80,11 +82,11 @@ class EngineThread(QThread):
                 update['volume'] = m.group(1)
 
             # Signal
-            if "signal:" in clean.lower():
+            if "signal:" in lower:
                 sig = clean.split(":", 1)[1].strip().upper()
                 update['signal'] = sig
 
-            # Direction
+            # Direction / arrow
             m = re.search(r'directional.*?([-+]?\d*\.?\d+)', clean, re.I)
             if m:
                 val = float(m.group(1))
@@ -95,14 +97,14 @@ class EngineThread(QThread):
                 self.data_update.emit(update)
 
     def stop(self):
-        if self.process:
-            self.process.terminate()
+        if self.proc:
+            self.proc.terminate()
 
 
 class GestaltDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GESTALT - Tactical Market Intelligence")
+        self.setWindowTitle("GESTALT")
         self.resize(1280, 720)
 
         # Dark theme
@@ -116,7 +118,7 @@ class GestaltDashboard(QMainWindow):
         pal.setColor(QPalette.ColorRole.ButtonText, QColor(230, 230, 255))
         app.setPalette(pal)
 
-        # System tray
+        # Tray icon - no warning
         self.tray = QSystemTrayIcon(self)
         self.tray.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         menu = QMenu()
@@ -127,15 +129,13 @@ class GestaltDashboard(QMainWindow):
 
         central = QWidget()
         self.setCentralWidget(central)
-        main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(10)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Header bar
+        # Header
         header = QHBoxLayout()
-        header.setSpacing(15)
-
-        self.lbl_contract = QLabel("CONTRACT: Loading...")
+        self.lbl_contract = QLabel(f"CONTRACT: {get_gold_contract()}")
         self.lbl_timestamp = QLabel("TIMESTAMP: —")
         self.lbl_price = QLabel("Price: —")
         self.lbl_volume = QLabel("VOLUME: —")
@@ -148,36 +148,35 @@ class GestaltDashboard(QMainWindow):
         header.addStretch()
         header.addWidget(self.lbl_price)
         header.addWidget(self.lbl_volume)
-        main_layout.addLayout(header)
+        layout.addLayout(header)
 
         # Three main cards
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(12)
+        cards = QHBoxLayout()
+        cards.setSpacing(12)
 
-        # Signal card
+        # Signal
         signal_card = QGroupBox("Indicator based on current holdings")
         s_lay = QVBoxLayout()
-        self.signal_main = QLabel("HOLD")
-        self.signal_main.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.signal_main.setStyleSheet("font-size:34px; font-weight:bold; color:#ffcc00;")
-        s_lay.addWidget(self.signal_main)
+        self.sig_big = QLabel("HOLD")
+        self.sig_big.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.sig_big.setStyleSheet("font-size:34px; font-weight:bold; color:#ffcc00;")
+        s_lay.addWidget(self.sig_big)
         s_lay.addWidget(QLabel("Signal History: —"), alignment=Qt.AlignmentFlag.AlignCenter)
         signal_card.setLayout(s_lay)
         signal_card.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
-        cards_layout.addWidget(signal_card)
+        cards.addWidget(signal_card)
 
-        # Direction card
+        # Direction
         dir_card = QGroupBox("Predicted Market Direction Indicator")
         d_lay = QHBoxLayout()
         self.dir_arrow = QLabel("→")
         self.dir_arrow.setStyleSheet("font-size:52px; color:#ff4444;")
         self.dir_value = QLabel("-.03")
-        self.dir_value.setStyleSheet("font-size:26px;")
         d_lay.addWidget(self.dir_arrow)
         d_lay.addWidget(self.dir_value)
         dir_card.setLayout(d_lay)
         dir_card.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
-        cards_layout.addWidget(dir_card)
+        cards.addWidget(dir_card)
 
         # Minor event
         minor_card = QGroupBox("Minor Event Consider")
@@ -188,134 +187,125 @@ class GestaltDashboard(QMainWindow):
         m_lay.addWidget(QLabel("Purchase/Sale"), alignment=Qt.AlignmentFlag.AlignCenter)
         minor_card.setLayout(m_lay)
         minor_card.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
-        cards_layout.addWidget(minor_card)
+        cards.addWidget(minor_card)
 
-        main_layout.addLayout(cards_layout)
+        layout.addLayout(cards)
 
         # Bottom row
-        bottom_row = QHBoxLayout()
-        bottom_row.setSpacing(12)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(12)
 
-        # Stability thresholds
-        thresh_card = QGroupBox("STABILITY SCORE THRESHOLDS")
+        # Thresholds
+        thresh = QGroupBox("STABILITY SCORE THRESHOLDS")
         t_lay = QVBoxLayout()
-        thresholds = [
+        items = [
             ("85-100 Highly stable", "#00ff00"),
             ("70-84 Stable", "#00ff00"),
             ("50-69 Transitional", "#ffcc00"),
             ("30-49 Unstable", "#ffcc00"),
             ("0-29 Collapse", "#ff4444")
         ]
-        for text, color in thresholds:
-            lbl = QLabel(text)
-            lbl.setStyleSheet(f"color:{color};")
+        for txt, col in items:
+            lbl = QLabel(txt)
+            lbl.setStyleSheet(f"color:{col};")
             t_lay.addWidget(lbl)
-        thresh_card.setLayout(t_lay)
-        thresh_card.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
-        bottom_row.addWidget(thresh_card)
+        thresh.setLayout(t_lay)
+        thresh.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
+        bottom.addWidget(thresh)
 
         # Current score
-        score_card = QGroupBox("Current Stability Score")
+        score = QGroupBox("Current Stability Score")
         s_lay = QVBoxLayout()
-        self.score_progress = QProgressBar()
-        self.score_progress.setRange(0, 100)
-        self.score_progress.setValue(78)
-        self.score_progress.setStyleSheet("""
-            QProgressBar {background:#222; border:1px solid #444; color:white;}
-            QProgressBar::chunk {background:#ffcc00;}
-        """)
-        s_lay.addWidget(self.score_progress)
+        self.score_bar = QProgressBar()
+        self.score_bar.setRange(0, 100)
+        self.score_bar.setValue(78)
+        self.score_bar.setStyleSheet("QProgressBar {background:#222; border:1px solid #444; color:white;} QProgressBar::chunk {background:#ffcc00;}")
+        s_lay.addWidget(self.score_bar)
         s_lay.addWidget(QLabel("Stability Trend ="))
-        score_card.setLayout(s_lay)
-        score_card.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
-        bottom_row.addWidget(score_card)
+        score.setLayout(s_lay)
+        score.setStyleSheet("border:2px solid #444; border-radius:6px; padding:10px;")
+        bottom.addWidget(score)
 
         # Major warning
-        warn_card = QGroupBox("MAJOR EVENT WARNING 10 MIN")
+        warn = QGroupBox("MAJOR EVENT WARNING 10 MIN")
         w_lay = QVBoxLayout()
-        self.warn_label = QLabel("FLASH")
-        self.warn_label.setStyleSheet("font-size:26px; color:#ff44ff; font-weight:bold;")
-        w_lay.addWidget(self.warn_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        warn_card.setLayout(w_lay)
-        warn_card.setStyleSheet("border:2px solid #ff44ff; border-radius:6px; padding:10px; background:rgba(255,68,255,0.08);")
-        bottom_row.addWidget(warn_card)
+        self.warn_dot = QLabel("FLASH")
+        self.warn_dot.setStyleSheet("font-size:26px; color:#ff44ff; font-weight:bold;")
+        w_lay.addWidget(self.warn_dot, alignment=Qt.AlignmentFlag.AlignCenter)
+        warn.setLayout(w_lay)
+        warn.setStyleSheet("border:2px solid #ff44ff; border-radius:6px; padding:10px; background:rgba(255,68,255,0.08);")
+        bottom.addWidget(warn)
 
         # Major occurred
-        occ_card = QGroupBox("MAJOR EVENT OCCURRED")
+        occ = QGroupBox("MAJOR EVENT OCCURRED")
         o_lay = QVBoxLayout()
         o_lay.addWidget(QLabel("BOUGHT/SOLD SHARES AMOUNT ="))
-        btn_enter = QPushButton("ENTER")
-        btn_enter.setStyleSheet("background:#ffcc00; color:black; font-weight:bold; padding:10px;")
-        o_lay.addWidget(btn_enter)
-        occ_card.setLayout(o_lay)
-        occ_card.setStyleSheet("border:2px solid #ff4444; border-radius:6px; padding:10px;")
-        bottom_row.addWidget(occ_card)
+        btn = QPushButton("ENTER")
+        btn.setStyleSheet("background:#ffcc00; color:black; font-weight:bold; padding:10px;")
+        o_lay.addWidget(btn)
+        occ.setLayout(o_lay)
+        occ.setStyleSheet("border:2px solid #ff4444; border-radius:6px; padding:10px;")
+        bottom.addWidget(occ)
 
-        main_layout.addLayout(bottom_row)
+        layout.addLayout(bottom)
 
         # Controls
         ctrl = QHBoxLayout()
-        btn_start = QPushButton("START")
-        btn_start.clicked.connect(self.start_engine)
-        btn_stop = QPushButton("STOP")
-        btn_stop.clicked.connect(self.stop_engine)
-        ctrl.addWidget(btn_start)
-        ctrl.addWidget(btn_stop)
-        main_layout.addLayout(ctrl)
+        start = QPushButton("START")
+        start.clicked.connect(self.start_engine)
+        stop = QPushButton("STOP")
+        stop.clicked.connect(self.stop_engine)
+        ctrl.addWidget(start)
+        ctrl.addWidget(stop)
+        layout.addLayout(ctrl)
 
-        self.status_label = QLabel("Status: Ready")
-        main_layout.addWidget(self.status_label)
+        self.status = QLabel("Status: Ready")
+        layout.addWidget(self.status)
 
         # Engine
-        self.engine_thread = None
-        self.contract = get_gold_contract()
-
-        # Initial header
-        self.lbl_contract.setText(f"CONTRACT: {self.contract}")
-        self.lbl_timestamp.setText(f"TIMESTAMP: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.engine = None
 
     def start_engine(self):
-        if self.engine_thread and self.engine_thread.isRunning():
+        if self.engine and self.engine.isRunning():
             return
-        self.status_label.setText("Engine starting...")
-        self.engine_thread = EngineThread(self.contract)
-        self.engine_thread.new_line.connect(self.status_label.setText)
-        self.engine_thread.data_update.connect(self.update_ui)
-        self.engine_thread.start()
+        self.status.setText("Starting...")
+        self.engine = EngineThread(get_gold_contract())
+        self.engine.new_line.connect(self.status.setText)
+        self.engine.data_update.connect(self.update_data)
+        self.engine.start()
 
     def stop_engine(self):
-        if self.engine_thread:
-            self.engine_thread.stop()
-        self.status_label.setText("Engine stopped")
+        if self.engine:
+            self.engine.stop()
+        self.status.setText("Stopped")
 
-    def update_ui(self, data):
-        if 'contract' in data:
-            self.lbl_contract.setText(f"CONTRACT: {data['contract']}")
-        if 'timestamp' in data:
-            self.lbl_timestamp.setText(f"TIMESTAMP: {data['timestamp']}")
-        if 'price' in data:
-            self.lbl_price.setText(data['price'])
-        if 'volume' in data:
-            self.lbl_volume.setText(f"VOLUME: {data['volume']}")
-        if 'signal' in data:
-            sig = data['signal']
-            color = "#00ff00" if sig == "BUY" else "#ff4444" if sig == "SELL" else "#ffcc00"
-            self.signal_main.setText(sig)
+    def update_data(self, d):
+        if 'contract' in d:
+            self.lbl_contract.setText(f"CONTRACT: {d['contract']}")
+        if 'timestamp' in d:
+            self.lbl_timestamp.setText(f"TIMESTAMP: {d['timestamp']}")
+        if 'price' in d:
+            self.lbl_price.setText(d['price'])
+        if 'volume' in d:
+            self.lbl_volume.setText(f"VOLUME: {d['volume']}")
+        if 'signal' in d:
+            color = "#00ff00" if d['signal'] == "BUY" else "#ff4444" if d['signal'] == "SELL" else "#ffcc00"
+            self.signal_main.setText(d['signal'])
             self.signal_main.setStyleSheet(f"font-size:34px; font-weight:bold; color:{color};")
-        if 'dir_value' in data:
-            self.dir_value.setText(data['dir_value'])
-            self.dir_arrow.setText(data['dir_sign'])
-            color = "#00ff00" if data['dir_sign'] == '↑' else "#ff4444" if data['dir_sign'] == '↓' else "#ffcc00"
+        if 'dir_value' in d:
+            self.dir_value.setText(d['dir_value'])
+            self.dir_arrow.setText(d['dir_sign'])
+            color = "#00ff00" if d['dir_sign'] == '↑' else "#ff4444" if d['dir_sign'] == '↓' else "#ffcc00"
             self.dir_arrow.setStyleSheet(f"font-size:52px; color:{color};")
 
     def closeEvent(self, event):
         event.ignore()
         self.hide()
-        self.tray.showMessage("GESTALT", "Minimized to tray", QSystemTrayIcon.MessageIcon.Information)
+        self.tray.showMessage("GESTALT", "Minimized to tray")
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = GestaltDashboard()
-    window.show()
+    win = GestaltDashboard()
+    win.show()
     sys.exit(app.exec())
